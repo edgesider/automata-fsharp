@@ -1,70 +1,68 @@
 ﻿module automata.main
 
 open automata.DFA
+open automata.NFA
 
 let testDFA () =
+    // 0*1*
+    // build from map
     let dfa0 =
-        { DFA.F =
-              fun state char ->
-                  match state with
-                  | 0 ->
-                      match char with
-                      | '0' -> Some(0)
-                      | '1' -> Some(1)
-                      | _ -> None
-                  | 1 ->
-                      match char with
-                      | '1' -> Some(1)
-                      | _ -> None
+        { DFA.Q = Set [ 0; 1 ]
+          F =
+              Map
+                  [ (0,
+                     Map
+                         [ ('0', 0)
+                           ('1', 1) ])
+                    (1, Map [ ('1', 1) ]) ]
           S = 0
-          E = 1 }
+          E = Set [ 1 ] }
 
+    // tuple as state
     let dfa1 =
-        { DFA.F =
-              fun state char ->
-                  match state with
-                  | 0 ->
-                      match char with
-                      | 0 -> Some(0)
-                      | 1 -> Some(1)
-                      | _ -> None
-                  | 1 ->
-                      match char with
-                      | 1 -> Some(1)
-                      | _ -> None
-          S = 0
-          E = 1 }
+        DFA.ofSeq
+            (Set
+                [ (0, 0)
+                  (0, 1) ]) (0, 0) (Set [ (0, 1) ])
+            [ ((0, 0), '0', (0, 0))
+              ((0, 0), '1', (0, 1))
+              ((0, 1), '1', (0, 1)) ]
 
-
+    // int as char
     let dfa2 =
-        DFA.ofMap
-            (Map
-                [ (0,
-                   Map
-                       [ ('0', 0)
-                         ('1', 1) ])
-                  (1, Map [ ('1', 1) ]) ]) 0 1
-
-    let dfa3 =
-        DFA.ofSeq
-            [ (0, '0', 0)
-              (0, '1', 1)
-              (1, '1', 1) ] 0 1
-
-    let dfa4 =
-        DFA.ofSeq
+        DFA.ofSeq (Set [ 0; 1 ]) 0 (Set [ 1 ])
             [ (0, 0, 0)
               (0, 1, 1)
-              (1, 1, 1) ] 0 1
+              (1, 1, 1) ]
 
 
-    dfa0.run "000111" |> printfn "%A"
-    dfa1.run [ 0; 0; 0; 1; 1; 1 ] |> printfn "%A"
-    dfa2.run "000111" |> printfn "%A"
-    dfa3.run "0000111" |> printfn "%A"
-    dfa4.run [ 0; 0; 0; 1; 1; 1 ] |> printfn "%A"
+    // 0*1*
+    assert (dfa0.run "000111" = true)
+    assert (dfa1.run "0000111" = true)
+    assert (dfa2.run [ 0; 0; 0; 1; 1; 1 ] = true)
+
+let testNFA () =
+    // 识别以相同字符开始和结尾的字符串
+    // 0(0|1)*0 | 1(0|1)*1
+    let nfa0 =
+        NFA.ofSeq (Set [ 0; 1; 2; 3 ]) 0 (Set [ 3 ])
+            [ (0, Char '0', Set [ 1 ])
+              (0, Char '1', Set [ 2 ])
+              (1, Char '0', Set [ 1; 3 ])
+              (1, Char '1', Set [ 1 ])
+              (2, Char '0', Set [ 2 ])
+              (2, Char '1', Set [ 2; 3 ]) ]
+
+    assert (nfa0.run "11" = true)
+    assert (nfa0.run "10010111" = true)
+    assert (nfa0.run "0100110" = true)
+    assert (nfa0.run "01" = false)
+    assert (nfa0.run "10" = false)
+    assert (nfa0.run "010011" = false)
+    assert (nfa0.run "110010" = false)
 
 [<EntryPoint>]
 let main argv =
     testDFA ()
+    testNFA ()
     0
