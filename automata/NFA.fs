@@ -33,13 +33,13 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
         assert m.Q.Contains q
         match m.F.TryFind q with
         | None -> None // 该状态下没有转移
-        | Some (t) -> t.TryFind char
+        | Some t -> t.TryFind char
 
     member private m.transmit (char: EChar<'char>) (qs: Set<'state>): Set<'state> =
         Set.fold (fun set q ->
             match m.single_transmit char q with
             | None -> set
-            | Some (qs) -> Set.union set qs) Set.empty qs
+            | Some qs -> Set.union set qs) Set.empty qs
 
     member private m.epsilon_closure(qs: Set<'state>): Set<'state> =
         let new_qs = m.transmit (Epsilon()) qs

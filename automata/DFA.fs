@@ -20,13 +20,13 @@ type DFA<'state, 'char when 'state: comparison and 'char: comparison> =
         |> Seq.scan (fun curr_q char ->
             match curr_q with
             | None -> None
-            | Some (q) -> m.transmit char q) (Some m.S)
+            | Some q -> m.transmit char q) (Some m.S)
         |> Seq.takeWhile (fun curr_q -> curr_q.IsSome)
         |> Seq.last
         |> fun q ->
             match q with
             | None -> false
-            | Some (q) -> m.E.Contains q
+            | Some q -> m.E.Contains q
 
     (*返回值：
         None: 该状态下没有转移，或没有对应该字符的转移，即该转移不存在
@@ -35,7 +35,7 @@ type DFA<'state, 'char when 'state: comparison and 'char: comparison> =
         assert m.Q.Contains curr_q
         match m.F.TryFind curr_q with
         | None -> None
-        | Some (t) -> t.TryFind char
+        | Some t -> t.TryFind char
 
     static member ofSeq Q S E (ts: seq<'state * 'char * 'state>): DFA<'state, 'char> =
         { DFA.Q = Q
