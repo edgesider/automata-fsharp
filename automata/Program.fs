@@ -45,7 +45,7 @@ let testNFA () =
     // 识别以相同字符开始和结尾的字符串
     // 0(0|1)*0 | 1(0|1)*1
     let nfa0 =
-        NFA.ofSeq (Set [ 0; 1; 2; 3 ]) 0 (Set [ 3 ])
+        NFA.ofSeq (Set [ 0; 1; 2; 3 ]) (Set [ '0'; '1' ]) 0 (Set [ 3 ])
             [ (0, Char '0', Set [ 1 ])
               (0, Char '1', Set [ 2 ])
               (1, Char '0', Set [ 1; 3 ])
@@ -60,6 +60,26 @@ let testNFA () =
     assert (nfa0.run "10" = false)
     assert (nfa0.run "010011" = false)
     assert (nfa0.run "110010" = false)
+
+    let dfa0 = nfa0.toDFA ()
+//    printfn "%A" dfa0
+    assert (dfa0.run "11" = true)
+    assert (dfa0.run "10010111" = true)
+    assert (dfa0.run "0100110" = true)
+    assert (dfa0.run "01" = false)
+    assert (dfa0.run "10" = false)
+    assert (dfa0.run "010011" = false)
+    assert (dfa0.run "110010" = false)
+
+    let dfa1 = dfa0.renameStates (Seq.initInfinite id)
+//    printfn "%A" dfa1
+    assert (dfa1.run "11" = true)
+    assert (dfa1.run "10010111" = true)
+    assert (dfa1.run "0100110" = true)
+    assert (dfa1.run "01" = false)
+    assert (dfa1.run "10" = false)
+    assert (dfa1.run "010011" = false)
+    assert (dfa1.run "110010" = false)
 
 [<EntryPoint>]
 let main argv =

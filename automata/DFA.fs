@@ -28,6 +28,22 @@ type DFA<'state, 'char when 'state: comparison and 'char: comparison> =
             | None -> false
             | Some q -> m.E.Contains q
 
+    member m.renameStates<'new_state when 'new_state: comparison>(state_seq: seq<'new_state>): DFA<'new_state, 'char> =
+        let Q = Seq.take m.Q.Count state_seq |> Set.ofSeq
+
+        let stateMap =
+            (m.Q, Q)
+            ||> Seq.zip
+            |> Map.ofSeq
+
+        let S = stateMap.[m.S]
+        let E = Set.map (fun e -> stateMap.[e]) m.E
+
+        DFA.ofSeq Q S E
+            (m.F
+             |> mapToSeq
+             |> Seq.map (fun (q0, c, q1) -> (stateMap.[q0], c, stateMap.[q1])))
+
     (*返回值：
         None: 该状态下没有转移，或没有对应该字符的转移，即该转移不存在
         Some('state): 转移之后的状态*)
@@ -37,7 +53,8 @@ type DFA<'state, 'char when 'state: comparison and 'char: comparison> =
         | None -> None
         | Some t -> t.TryFind char
 
-    static member ofSeq Q S E (ts: seq<'state * 'char * 'state>): DFA<'state, 'char> =
+    static member ofSeq<'state, 'char when 'state: comparison and 'char: comparison> (Q: Set<'state>) (S: 'state)
+                  (E: Set<'state>) (ts: seq<'state * 'char * 'state>): DFA<'state, 'char> =
         { DFA.Q = Q
           F = seqToMap ts
           S = S
