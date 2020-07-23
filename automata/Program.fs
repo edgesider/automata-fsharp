@@ -1,7 +1,7 @@
 ﻿module automata.main
 
-open automata.DFA
-open automata.NFA
+open DFA
+open NFA
 
 let testDFA () =
     // 0*1*
@@ -62,7 +62,7 @@ let testNFA () =
     assert (nfa0.run "110010" = false)
 
     let dfa0 = nfa0.toDFA ()
-//    printfn "%A" dfa0
+    //    printfn "%A" dfa0
     assert (dfa0.run "11" = true)
     assert (dfa0.run "10010111" = true)
     assert (dfa0.run "0100110" = true)
@@ -72,7 +72,7 @@ let testNFA () =
     assert (dfa0.run "110010" = false)
 
     let dfa1 = dfa0.renameStates (Seq.initInfinite id)
-//    printfn "%A" dfa1
+    //    printfn "%A" dfa1
     assert (dfa1.run "11" = true)
     assert (dfa1.run "10010111" = true)
     assert (dfa1.run "0100110" = true)
@@ -80,6 +80,22 @@ let testNFA () =
     assert (dfa1.run "10" = false)
     assert (dfa1.run "010011" = false)
     assert (dfa1.run "110010" = false)
+
+    // test NotChar
+    let nfa1 =
+        NFA.ofSeq (Set [ 0; 1; 2 ]) (Set [ '0'; '1'; '2'; '3' ]) 0 (Set [ 2 ])
+            [ (0, Char '0', Set [ 1 ])
+              (1, NotChar(Set [ '0' ]), Set [ 2 ]) ]
+    assert (nfa1.run "00" = false)
+    assert (nfa1.run "01" = true)
+    assert (nfa1.run "02" = true)
+    assert (nfa1.run "03" = true)
+
+    let dfa11 = (nfa1.toDFA ()).renameStates(Seq.initInfinite id)
+    assert (dfa11.run "00" = false)
+    assert (dfa11.run "01" = true)
+    assert (dfa11.run "02" = true)
+    assert (dfa11.run "03" = true)
 
 [<EntryPoint>]
 let main argv =

@@ -4,8 +4,9 @@ open automata
 open DFA
 open utils
 
-type EChar<'char> =
+type EChar<'char when 'char: comparison> =
     | Char of 'char
+    | NotChar of Set<'char>
     | Epsilon
 
 type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
@@ -24,6 +25,7 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
 
     member m.toDFA(): DFA<Set<'state>, 'char> =
         // 从processingQS中取出一个状态，为该状态遍历所有字符，得到新的状态和相应的转移函数，递归调用。
+        // TODO 不需要遍历所有的字符，可以通过F表来判断哪些字符可以转移，这样就能处理NotChar之类的特殊字符
         let rec f
                 (dfaQ: Set<Set<'state>>)
                 (dfaF: Set<Set<'state> * 'char * Set<'state>>)
@@ -69,7 +71,28 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
         assert m.Q.Contains q
         match m.F.TryFind q with
         | None -> None // 该状态下没有转移
-        | Some t -> t.TryFind char
+        | Some t ->
+            match t.TryFind char with
+            // 先在正向匹配的路径中寻找
+            | Some qs -> Some qs
+            | None ->
+                // 如果未找到，则在该状态下所有反向匹配的转移中，寻找合适的转移（不包括该字符）
+                match char with
+                // 首先确保是普通字符
+                | Char char ->
+                    // 找出所有的NotChar
+                    Seq.choose (fun c ->
+                        match c with
+                        | NotChar cs -> Some(cs, t.[c])
+                        | _ -> None) (Map.keys t)
+                    // 过滤掉包含该字符的项
+                    |> Seq.filter (fun (cs: Set<'char>, _) -> cs.Contains char |> not)
+                    // 取出目标状态集
+                    |> Seq.map snd
+                    |> Set.unionMany
+                    |> fun s ->
+                        if s.IsEmpty then None else Some s
+                | _ -> None
 
     member private m.transmit (char: EChar<'char>) (qs: Set<'state>): Set<'state> =
         Set.fold (fun set q ->

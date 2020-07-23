@@ -15,3 +15,6 @@ let mapToSeq<'in_state, 'char, 'out_state when 'in_state: comparison and 'char: 
     Map.fold (fun l q t -> l @ Map.fold (fun l c q1 -> (q, c, q1) :: l) [] t) [] map |> Seq.ofList
 
 let TODO () = raise (Exception())
+
+module Map =
+    let keys (m: Map<'Key, 'T>) = Map.fold (fun keys k _ -> Set.add k keys) Set.empty m
