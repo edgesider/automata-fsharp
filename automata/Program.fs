@@ -2,6 +2,7 @@
 
 open DFA
 open NFA
+open sre
 
 let testDFA () =
     // 0*1*
@@ -87,8 +88,26 @@ let testNFA () =
     assert (dfa11.run "02" = true)
     assert (dfa11.run "03" = true)
 
+let testSRE () =
+    // 识别0
+    let m_0 = sre.Is '0'
+    // 识别1
+    let m_1 = sre.Is '1'
+    // 识别2
+    let m_2 = sre.Is '2'
+
+    assert (m_0.run "0" = true)
+    assert (m_1.run "1" = true)
+    assert (m_2.run "2" = true)
+
+    // +连接，/或，!*（前缀）克林闭包
+    // 0(10)*2
+    let m = m_0 + !*(m_1 / m_0) + m_2
+    assert (m.run "01101010102" = true)
+
 [<EntryPoint>]
 let main argv =
     testDFA ()
     testNFA ()
+    testSRE ()
     0

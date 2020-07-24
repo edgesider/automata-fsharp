@@ -124,3 +124,66 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
           F = seqToMap ts
           S = S
           E = E }
+
+    member m.unitEnds(): NFA<int, 'char> =
+        if (m.E.Count <= 1) then
+            m.renameStates (Seq.initInfinite id)
+        else
+            let m = m.renameStates (Seq.initInfinite id)
+            let newEnd = Set [ (m.Q |> Seq.max) + 1 ]
+            let f = Set.fold (fun f e -> addTransmit f (e, Epsilon, newEnd)) m.F m.E
+            { m with
+                  Q = m.Q + newEnd
+                  F = f
+                  E = newEnd }
+
+
+    // XRE
+    static member (+)(m: NFA<int, 'char>, m1: NFA<int, 'char>): NFA<int, 'char> =
+        let m = m.unitEnds ()
+        let m1 = m1.unitEnds ()
+        let m1 = m1.renameStates (Seq.initInfinite (fun i -> i + m.Q.Count))
+        { NFA.Q = m.Q + m1.Q
+          C = m.C + m1.C
+          F =
+              ((m.F |> Map.toSeq), (m1.F |> Map.toSeq))
+              ||> Seq.append
+              |> Map.ofSeq
+              |> fun map -> addTransmit map (m.E |> Seq.head, Epsilon, Set [ m1.S ])
+          S = m.S
+          E = m1.E }
+
+    static member (/)(m: NFA<int, 'char>, m1: NFA<int, 'char>): NFA<int, 'char> =
+        let m = m.unitEnds ()
+        let m1 = m1.unitEnds ()
+        let m1 = m1.renameStates (Seq.initInfinite (fun i -> i + m.Q.Count))
+        let newStart = m.Q.Count + m1.Q.Count
+        let newEnd = m.Q.Count + m1.Q.Count + 1
+
+        let F =
+            ((m.F |> Map.toSeq), (m1.F |> Map.toSeq))
+            ||> Seq.append
+            |> Map.ofSeq
+            |> fun map -> addTransmit map (newStart, Epsilon, Set [ m.S; m1.S ])
+            |> fun map -> addTransmit map (m.E |> Seq.head, Epsilon, Set [ newEnd ])
+            |> fun map -> addTransmit map (m1.E |> Seq.head, Epsilon, Set [ newEnd ])
+        { NFA.Q = m.Q + m1.Q + Set [ newStart; newEnd ]
+          C = m.C + m1.C
+          F = F
+          S = newStart
+          E = Set [ newEnd ] }
+
+    static member (!*)(m: NFA<int, 'char>): NFA<int, 'char> =
+        let m = m.unitEnds ()
+        let newStart = m.Q.Count
+        let newEnd = m.Q.Count + 1
+
+        let F =
+            m.F
+            |> fun map -> addTransmit map (m.E |> Seq.head, Epsilon, Set [ m.S; newEnd ])
+            |> fun map -> addTransmit map (newStart, Epsilon, Set [ m.S; newEnd ])
+        { NFA.Q = m.Q + Set [ newStart; newEnd ]
+          C = m.C
+          F = F
+          S = newStart
+          E = Set [ newEnd ] }
