@@ -6,7 +6,7 @@ open utils
 
 type EChar<'char when 'char: comparison> =
     | Char of 'char
-    | NotChar of Set<'char>
+    | NotIn of Set<'char>
     | Epsilon
 
 type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
@@ -23,9 +23,9 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
         |> Seq.last
         |> m.isEnd
 
-    member m.toDFA(): DFA<Set<'state>, 'char> =
+    member m.toDFA(): DFA<int, 'char> =
         // 从processingQS中取出一个状态，为该状态遍历所有字符，得到新的状态和相应的转移函数，递归调用。
-        // TODO 不需要遍历所有的字符，可以通过F表来判断哪些字符可以转移，这样就能处理NotChar之类的特殊字符
+        // TODO 不需要遍历所有的字符，可以通过F表来判断哪些字符可以转移，这样就能处理NotIn之类的特殊字符
         let rec f
                 (dfaQ: Set<Set<'state>>)
                 (dfaF: Set<Set<'state> * 'char * Set<'state>>)
@@ -36,6 +36,7 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
                     let q = m.epsilonTransmit c head
 
                     let qs =
+                        // 如果是新的状态，则加入要处理的状态集
                         if (dfaQ.Contains q || List.contains q processingQS)
                         then qs
                         else q :: qs
@@ -46,7 +47,7 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
 
         let (Q, F) = f Set.empty Set.empty [ Set [ m.S ] ]
         let E = Set.filter (fun q -> m.isEnd q) Q
-        DFA.ofSeq Q (Set [ m.S ]) E F
+        (DFA.ofSeq Q (Set [ m.S ]) E F).renameStates(Seq.initInfinite id)
 
     member m.renameStates<'new_state when 'new_state: comparison>(state_seq: seq<'new_state>): NFA<'new_state, 'char> =
         let Q = Seq.take m.Q.Count state_seq |> Set.ofSeq
@@ -80,10 +81,10 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
                 match char with
                 // 首先确保是普通字符
                 | Char char ->
-                    // 找出所有的NotChar
+                    // 找出所有的NotIn
                     Seq.choose (fun c ->
                         match c with
-                        | NotChar cs -> Some(cs, t.[c])
+                        | NotIn cs -> Some(cs, t.[c])
                         | _ -> None) (Map.keys t)
                     // 过滤掉包含该字符的项
                     |> Seq.filter (fun (cs: Set<'char>, _) -> cs.Contains char |> not)
