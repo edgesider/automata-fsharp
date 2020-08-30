@@ -27,3 +27,9 @@ assert (m_2.run "2" = true)
 let m = m_0 + !*(m_1 / m_0) + m_2
 assert (m.run "01101010102" = true)
 ```
+
+
+### TODO
+
+- [ ] NFA扩展
+- [ ] 正则字符串->NFA
