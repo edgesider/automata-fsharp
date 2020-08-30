@@ -9,12 +9,26 @@ type EChar<'char when 'char: comparison> =
     | NotIn of Set<'char>
     | Epsilon
 
+type F<'state, 'char when 'state: comparison and 'char: comparison> = Map<'state, Map<EChar<'char>, Set<'state>>>
+
 type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
     { Q: Set<'state>
       C: Set<'char>
-      F: Map<'state, Map<EChar<'char>, Set<'state>>>
+      F: F<'state, 'char>
       S: 'state
       E: Set<'state> }
+
+type EChar<'char when 'char: comparison> with
+    member x.isAccept<'state when 'state: comparison> (char: EChar<'char>) (m: NFA<'state, 'char>): bool =
+        match x with
+        | Epsilon -> char = x
+        | Char _ -> char = x
+        | NotIn cs ->
+            match char with
+            | Char char -> cs.Contains char |> not
+            | _ -> false
+
+type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
 
     member m.run(input: seq<'char>) =
         input
@@ -22,6 +36,47 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
         |> Seq.takeWhile (fun qs -> not (Set.isEmpty qs))
         |> Seq.last
         |> m.isEnd
+
+    member private m.singleTransmit (char: EChar<'char>) (q: 'state): Set<'state> =
+        assert m.Q.Contains q
+        match m.F.TryFind q with
+        | None -> Set.empty // 该状态下没有转移
+        | Some t ->
+            let cs = Map.keys t
+            // 遍历每条路径
+            Seq.fold (fun set (c: EChar<'char>) ->
+                if c.isAccept char m then Set.union set t.[c] else set) Set.empty cs
+
+    member private m.transmit (char: EChar<'char>) (qs: Set<'state>): Set<'state> =
+        Set.fold (fun set q -> Set.union set (m.singleTransmit char q)) Set.empty qs
+
+    member private m.epsilonClosure(qs: Set<'state>): Set<'state> =
+        let new_qs = m.transmit Epsilon qs
+        if new_qs.IsSubsetOf qs then qs else m.epsilonClosure (Set.union qs new_qs)
+
+    member private m.epsilonTransmit (char: 'char) (qs: Set<'state>) =
+        qs
+        |> m.epsilonClosure
+        |> m.transmit (Char char)
+        |> m.epsilonClosure
+
+    member private m.isEnd(qs: Set<'state>) =
+        qs
+        |> Set.intersect m.E
+        |> Set.isEmpty
+        |> not
+
+    member m.unitEnds(): NFA<int, 'char> =
+        if (m.E.Count <= 1) then
+            m.renameStates (Seq.initInfinite id)
+        else
+            let m = m.renameStates (Seq.initInfinite id)
+            let newEnd = Set [ (m.Q |> Seq.max) + 1 ]
+            let f = Set.fold (fun f e -> addTransmit f (e, Epsilon, newEnd)) m.F m.E
+            { m with
+                  Q = m.Q + newEnd
+                  F = f
+                  E = newEnd }
 
     member m.toDFA(): DFA<int, 'char> =
         // 从processingQS中取出一个状态，为该状态遍历所有字符，得到新的状态和相应的转移函数，递归调用。
@@ -65,58 +120,6 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
              |> mapToSeq
              |> Seq.map (fun (q0, c, q1) -> (stateMap.[q0], c, Set.map (fun q -> stateMap.[q]) q1)))
 
-    (*返回值：
-        None: 该状态下没有转移，或没有对应该字符的转移，即该转移不存在
-        Some(Set<'state>): 转移之后的状态集合*)
-    member private m.singleTransmit (char: EChar<'char>) (q: 'state): Option<Set<'state>> =
-        assert m.Q.Contains q
-        match m.F.TryFind q with
-        | None -> None // 该状态下没有转移
-        | Some t ->
-            match t.TryFind char with
-            // 先在正向匹配的路径中寻找
-            | Some qs -> Some qs
-            | None ->
-                // 如果未找到，则在该状态下所有反向匹配的转移中，寻找合适的转移（不包括该字符）
-                match char with
-                // 首先确保是普通字符
-                | Char char ->
-                    // 找出所有的NotIn
-                    Seq.choose (fun c ->
-                        match c with
-                        | NotIn cs -> Some(cs, t.[c])
-                        | _ -> None) (Map.keys t)
-                    // 过滤掉包含该字符的项
-                    |> Seq.filter (fun (cs: Set<'char>, _) -> cs.Contains char |> not)
-                    // 取出目标状态集
-                    |> Seq.map snd
-                    |> Set.unionMany
-                    |> fun s ->
-                        if s.IsEmpty then None else Some s
-                | _ -> None
-
-    member private m.transmit (char: EChar<'char>) (qs: Set<'state>): Set<'state> =
-        Set.fold (fun set q ->
-            match m.singleTransmit char q with
-            | None -> set
-            | Some qs -> Set.union set qs) Set.empty qs
-
-    member private m.epsilonClosure(qs: Set<'state>): Set<'state> =
-        let new_qs = m.transmit Epsilon qs
-        if new_qs.IsSubsetOf qs then qs else m.epsilonClosure (Set.union qs new_qs)
-
-    member private m.epsilonTransmit (char: 'char) (qs: Set<'state>) =
-        qs
-        |> m.epsilonClosure
-        |> m.transmit (Char char)
-        |> m.epsilonClosure
-
-    member private m.isEnd(qs: Set<'state>) =
-        qs
-        |> Set.intersect m.E
-        |> Set.isEmpty
-        |> not
-
     static member ofSeq<'state, 'char when 'state: comparison and 'char: comparison> (Q: Set<'state>) (C: Set<'char>)
                   (S: 'state) (E: Set<'state>) (ts: seq<'state * EChar<'char> * Set<'state>>): NFA<'state, 'char> =
         { NFA.Q = Q
@@ -125,20 +128,8 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
           S = S
           E = E }
 
-    member m.unitEnds(): NFA<int, 'char> =
-        if (m.E.Count <= 1) then
-            m.renameStates (Seq.initInfinite id)
-        else
-            let m = m.renameStates (Seq.initInfinite id)
-            let newEnd = Set [ (m.Q |> Seq.max) + 1 ]
-            let f = Set.fold (fun f e -> addTransmit f (e, Epsilon, newEnd)) m.F m.E
-            { m with
-                  Q = m.Q + newEnd
-                  F = f
-                  E = newEnd }
 
-
-    // XRE
+    // SRE
     static member (+)(m: NFA<int, 'char>, m1: NFA<int, 'char>): NFA<int, 'char> =
         let m = m.unitEnds ()
         let m1 = m1.unitEnds ()
