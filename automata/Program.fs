@@ -1,8 +1,11 @@
-﻿module automata.main
+module automata.main
 
 open DFA
 open NFA
 open sre
+
+let assertTrue ex = assert (ex = true)
+let assertFalse ex = assert (ex = false)
 
 let testDFA () =
     // 0*1*
@@ -38,9 +41,9 @@ let testDFA () =
 
 
     // 0*1*
-    assert (dfa0.run "000111" = true)
-    assert (dfa1.run "0000111" = true)
-    assert (dfa2.run [ 0; 0; 0; 1; 1; 1 ] = true)
+    dfa0.run "000111" |> assertTrue
+    dfa1.run "0000111" |> assertTrue
+    dfa2.run [ 0; 0; 0; 1; 1; 1 ] |> assertTrue
 
 let testNFA () =
     // 识别以相同字符开始和结尾的字符串
@@ -54,39 +57,62 @@ let testNFA () =
               (2, Char '0', Set [ 2 ])
               (2, Char '1', Set [ 2; 3 ]) ]
 
-    assert (nfa0.run "11" = true)
-    assert (nfa0.run "10010111" = true)
-    assert (nfa0.run "0100110" = true)
-    assert (nfa0.run "01" = false)
-    assert (nfa0.run "10" = false)
-    assert (nfa0.run "010011" = false)
-    assert (nfa0.run "110010" = false)
+    nfa0.run "11" |> assertTrue
+    nfa0.run "10010111" |> assertTrue
+    nfa0.run "0100110" |> assertTrue
+    nfa0.run "01" |> assertFalse
+    nfa0.run "10" |> assertFalse
+    nfa0.run "010011" |> assertFalse
+    nfa0.run "110010" |> assertFalse
 
     let dfa0 = nfa0.toDFA ()
     //    printfn "%A" dfa0
-    assert (dfa0.run "11" = true)
-    assert (dfa0.run "10010111" = true)
-    assert (dfa0.run "0100110" = true)
-    assert (dfa0.run "01" = false)
-    assert (dfa0.run "10" = false)
-    assert (dfa0.run "010011" = false)
-    assert (dfa0.run "110010" = false)
+    dfa0.run "11" |> assertTrue
+    dfa0.run "10010111" |> assertTrue
+    dfa0.run "0100110" |> assertTrue
+    dfa0.run "01" |> assertFalse
+    dfa0.run "10" |> assertFalse
+    dfa0.run "010011" |> assertFalse
+    dfa0.run "110010" |> assertFalse
 
     // test NotChar
     let nfa1 =
         NFA.ofSeq (Set [ 0; 1; 2 ]) (Set [ '0'; '1'; '2'; '3' ]) 0 (Set [ 2 ])
             [ (0, Char '0', Set [ 1 ])
               (1, NotIn(Set [ '0' ]), Set [ 2 ]) ]
-    assert (nfa1.run "00" = false)
-    assert (nfa1.run "01" = true)
-    assert (nfa1.run "02" = true)
-    assert (nfa1.run "03" = true)
+    nfa1.run "00" |> assertFalse
+    nfa1.run "01" |> assertTrue
+    nfa1.run "02" |> assertTrue
+    nfa1.run "03" |> assertTrue
 
     let dfa11 = (nfa1.toDFA ()).renameStates(Seq.initInfinite id)
-    assert (dfa11.run "00" = false)
-    assert (dfa11.run "01" = true)
-    assert (dfa11.run "02" = true)
-    assert (dfa11.run "03" = true)
+    dfa11.run "00" |> assertFalse
+    dfa11.run "01" |> assertTrue
+    dfa11.run "02" |> assertTrue
+    dfa11.run "03" |> assertTrue
+
+    // 测试多个路径
+    let m =
+        NFA.ofSeq (Set [ 0; 1; 2; 3 ]) (Set [ '1'; '2'; '3' ]) 0 (Set [ 1; 3 ])
+            // 1|[^2]3
+            [ (0, Char '1', Set [ 1 ])
+              (0, NotIn(Set [ '2' ]), Set [ 2 ])
+              (2, Char '3', Set [ 3 ]) ]
+    m.run "1" |> assertTrue
+    m.run "13" |> assertTrue
+    m.run "23" |> assertFalse
+
+    // 测试空状态提前退出
+    let m = sre.Is '1' + sre.Is '2' + sre.Is '3'
+
+    let s =
+        seq {
+            for c in "1245" do
+                // 不应该访问到'5'
+                if c = '5' then assert false
+                c
+        }
+    m.run s |> assertFalse
 
 let testSRE () =
     // 识别0
@@ -96,14 +122,18 @@ let testSRE () =
     // 识别2
     let m_2 = sre.Is '2'
 
-    assert (m_0.run "0" = true)
-    assert (m_1.run "1" = true)
-    assert (m_2.run "2" = true)
+    m_0.run "0" |> assertTrue
+    m_1.run "1" |> assertTrue
+    m_2.run "2" |> assertTrue
 
     // +连接，/或，!*（前缀）克林闭包
     // 0(10)*2
     let m = m_0 + !*(m_1 / m_0) + m_2
-    assert (m.run "01101010102" = true)
+    m.run "01101010102" |> assertTrue
+
+    // 0(123)*[^456]0
+    let m = sre.Is '0' + !*(sre.Is '1' + sre.Is '2' + sre.Is '3') + sre.NotIn [ '4'; '5'; '6' ] + sre.Is '0'
+    m.run "012312312320" |> assertTrue
 
 [<EntryPoint>]
 let main argv =
