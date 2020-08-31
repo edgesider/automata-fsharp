@@ -1,5 +1,6 @@
 module automata.NFA
 
+open System
 open automata
 open DFA
 open utils
@@ -19,7 +20,7 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
       E: Set<'state> }
 
 type EChar<'char when 'char: comparison> with
-    member x.isAccept<'state when 'state: comparison> (char: EChar<'char>) (m: NFA<'state, 'char>): bool =
+    member x.isAccept<'state when 'state: comparison> (char: EChar<'char>) (_m: NFA<'state, 'char>): bool =
         match x with
         | Epsilon -> char = x
         | Char _ -> char = x
@@ -32,9 +33,12 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
 
     member m.run(input: seq<'char>) =
         input
-        |> Seq.scan (fun curr_qs char -> m.epsilonTransmit char curr_qs) (Set [ m.S ])
-        |> Seq.takeWhile (fun qs -> not (Set.isEmpty qs))
+        // 退出的原因有两种：input结束或者状态集为空。如果使用单独的curr_qs，就无法得知takeWhile退出的原因了。
+        |> Seq.scan (fun (_prev_qs, curr_qs) char -> (curr_qs, m.epsilonTransmit char curr_qs))
+               (Set [ m.S ], Set [ m.S ])
+        |> Seq.takeWhile (fun (prev, _) -> Set.isEmpty prev |> not)
         |> Seq.last
+        |> snd
         |> m.isEnd
 
     member private m.singleTransmit (char: EChar<'char>) (q: 'state): Set<'state> =
@@ -42,10 +46,11 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
         match m.F.TryFind q with
         | None -> Set.empty // 该状态下没有转移
         | Some t ->
-            let cs = Map.keys t
             // 遍历每条路径
-            Seq.fold (fun set (c: EChar<'char>) ->
-                if c.isAccept char m then Set.union set t.[c] else set) Set.empty cs
+            t
+            |> Map.fold (fun qs c to_qs ->
+                // 如果该路径接受该字符，将转移后的状态加入qs中
+                if c.isAccept char m then Set.union qs to_qs else qs) Set.empty
 
     member private m.transmit (char: EChar<'char>) (qs: Set<'state>): Set<'state> =
         Set.fold (fun set q -> Set.union set (m.singleTransmit char q)) Set.empty qs
@@ -106,19 +111,20 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
 
     member m.renameStates<'new_state when 'new_state: comparison>(state_seq: seq<'new_state>): NFA<'new_state, 'char> =
         let Q = Seq.take m.Q.Count state_seq |> Set.ofSeq
+        if Set.count Q <> m.Q.Count then raise (ArgumentException("repeated state"))
 
-        let stateMap =
+        let state_map =
             (m.Q, Q)
             ||> Seq.zip
             |> Map.ofSeq
 
-        let S = stateMap.[m.S]
-        let E = Set.map (fun e -> stateMap.[e]) m.E
+        let S = state_map.[m.S]
+        let E = Set.map (fun e -> state_map.[e]) m.E
 
         NFA.ofSeq Q m.C S E
             (m.F
              |> mapToSeq
-             |> Seq.map (fun (q0, c, q1) -> (stateMap.[q0], c, Set.map (fun q -> stateMap.[q]) q1)))
+             |> Seq.map (fun (q0, c, q1) -> (state_map.[q0], c, Set.map (fun q -> state_map.[q]) q1)))
 
     static member ofSeq<'state, 'char when 'state: comparison and 'char: comparison> (Q: Set<'state>) (C: Set<'char>)
                   (S: 'state) (E: Set<'state>) (ts: seq<'state * EChar<'char> * Set<'state>>): NFA<'state, 'char> =
