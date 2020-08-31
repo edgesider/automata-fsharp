@@ -32,14 +32,19 @@ type EChar<'char when 'char: comparison> with
 type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
 
     member m.run(input: seq<'char>) =
-        input
-        // 退出的原因有两种：input结束或者状态集为空。如果使用单独的curr_qs，就无法得知takeWhile退出的原因了。
-        |> Seq.scan (fun (_prev_qs, curr_qs) char -> (curr_qs, m.epsilonTransmit char curr_qs))
-               (Set [ m.S ], Set [ m.S ])
-        |> Seq.takeWhile (fun (prev, _) -> Set.isEmpty prev |> not)
+        // 退出的原因有两种：input结束或者状态集为空。
+        let mutable empty = false // 是否以空状态结束
+        ((Set [ m.S ]), input)
+        ||> Seq.scan m.epsilonTransmit
+        |> Seq.takeWhile (fun qs ->
+            if Set.isEmpty qs then
+                // takeWhile会在false之前停止，所以序列的末尾不会出现空集，所以需要保存以空集退出的状态
+                empty <- true
+                false // 退出
+            else
+                true)
         |> Seq.last
-        |> snd
-        |> m.isEnd
+        |> fun qs -> not empty && m.isEnd qs
 
     member private m.singleTransmit (char: EChar<'char>) (q: 'state): Set<'state> =
         assert m.Q.Contains q
@@ -59,7 +64,7 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
         let new_qs = m.transmit Epsilon qs
         if new_qs.IsSubsetOf qs then qs else m.epsilonClosure (Set.union qs new_qs)
 
-    member private m.epsilonTransmit (char: 'char) (qs: Set<'state>) =
+    member private m.epsilonTransmit (qs: Set<'state>) (char: 'char) =
         qs
         |> m.epsilonClosure
         |> m.transmit (Char char)
@@ -93,7 +98,7 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
             match processingQS with
             | head :: tail ->
                 Seq.fold (fun (qs, fs) c ->
-                    let q = m.epsilonTransmit c head
+                    let q = m.epsilonTransmit head c
 
                     let qs =
                         // 如果是新的状态，则加入要处理的状态集
