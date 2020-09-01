@@ -9,6 +9,7 @@
         <Compile Include="utils.fs" />
         <Compile Include="DFA.fs" />
         <Compile Include="NFA.fs" />
+        <Compile Include="constructor.fs" />
         <Compile Include="sre.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
