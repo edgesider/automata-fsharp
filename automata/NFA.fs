@@ -34,7 +34,7 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
     member m.run(input: seq<'char>) =
         // 退出的原因有两种：input结束或者状态集为空。
         let mutable empty = false // 是否以空状态结束
-        ((Set [ m.S ]), input)
+        ((Set [ m.S ]) |> m.epsilonClosure, input) // 先对起始状态进行epsilon闭包
         ||> Seq.scan m.epsilonTransmit
         |> Seq.takeWhile (fun qs ->
             if Set.isEmpty qs then
@@ -66,7 +66,6 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
 
     member private m.epsilonTransmit (qs: Set<'state>) (char: 'char) =
         qs
-        |> m.epsilonClosure
         |> m.transmit (Char char)
         |> m.epsilonClosure
 
