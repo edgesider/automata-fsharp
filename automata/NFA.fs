@@ -12,12 +12,17 @@ type EChar<'char when 'char: comparison> =
 
 type F<'state, 'char when 'state: comparison and 'char: comparison> = Map<'state, Map<EChar<'char>, Set<'state>>>
 
+type StateRule<'state when 'state: comparison> =
+    | Require of a: 'state * b: 'state // a require b
+    | Deny of a: 'state * b: 'state // a deny b
+
 type NFA<'state, 'char when 'state: comparison and 'char: comparison> =
     { Q: Set<'state>
       C: Set<'char>
       F: F<'state, 'char>
       S: 'state
-      E: Set<'state> }
+      E: Set<'state>
+      R: Set<StateRule<'state>> }
 
 type EChar<'char when 'char: comparison> with
     member x.isAccept<'state when 'state: comparison> (char: EChar<'char>) (_m: NFA<'state, 'char>): bool =
@@ -62,12 +67,25 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
 
     member private m.epsilonClosure(qs: Set<'state>): Set<'state> =
         let new_qs = m.transmit Epsilon qs
-        if new_qs.IsSubsetOf qs then qs else m.epsilonClosure (Set.union qs new_qs)
+        if new_qs.IsSubsetOf qs then
+            // 在epsilon闭包之后应用rules
+            qs |> m.applyRules
+        else
+            m.epsilonClosure (Set.union qs new_qs)
 
     member private m.epsilonTransmit (qs: Set<'state>) (char: 'char) =
         qs
         |> m.transmit (Char char)
         |> m.epsilonClosure
+
+    member private m.applyRules(qs: Set<'state>): Set<'state> =
+        (qs, m.R)
+        ||> Set.fold (fun qs rule ->
+                match rule with
+                | Require (a, b) ->
+                    if qs.Contains a && not (qs.Contains b) then qs.Remove a else qs
+                | Deny (a, b) ->
+                    if qs.Contains a && qs.Contains b then qs.Remove a else qs)
 
     member private m.isEnd(qs: Set<'state>) =
         qs
@@ -136,4 +154,5 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
           C = C
           F = seqToMap ts
           S = S
-          E = E }
+          E = E
+          R = Set.empty }

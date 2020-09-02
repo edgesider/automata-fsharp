@@ -17,7 +17,8 @@ type NFAConstructor =
               |> Map.ofSeq
               |> fun map -> addTransmit map (m.E |> Seq.head, Epsilon, Set [ m1.S ])
           S = m.S
-          E = m1.E }
+          E = m1.E
+          R = Set.empty }
 
     static member alternate (m: NFA<int, 'char>) (m1: NFA<int, 'char>): NFA<int, 'char> =
         let m = m.unitEnds ()
@@ -37,7 +38,8 @@ type NFAConstructor =
           C = m.C + m1.C
           F = F
           S = newStart
-          E = Set [ newEnd ] }
+          E = Set [ newEnd ]
+          R = Set.empty }
 
     static member kleene_closure(m: NFA<int, 'char>): NFA<int, 'char> =
         let m = m.unitEnds ()
@@ -52,7 +54,8 @@ type NFAConstructor =
           C = m.C
           F = F
           S = newStart
-          E = Set [ newEnd ] }
+          E = Set [ newEnd ]
+          R = Set.empty }
 
     static member look_forward (m: NFA<int, 'char>) (to_look: NFA<int, 'char>) = ()
 
