@@ -6,8 +6,8 @@ open utils
 type NFAConstructor =
 
     static member concatenate (m: NFA<int, 'char>) (m1: NFA<int, 'char>): NFA<int, 'char> =
-        let m = m.unitEnds ()
-        let m1 = m1.unitEnds ()
+        let m = m.unitEnds
+        let m1 = m1.unitEnds
         let m1 = m1.renameStates (Seq.initInfinite (fun i -> i + m.Q.Count))
         { NFA.Q = m.Q + m1.Q
           C = m.C + m1.C
@@ -21,8 +21,8 @@ type NFAConstructor =
           R = Set.empty }
 
     static member alternate (m: NFA<int, 'char>) (m1: NFA<int, 'char>): NFA<int, 'char> =
-        let m = m.unitEnds ()
-        let m1 = m1.unitEnds ()
+        let m = m.unitEnds
+        let m1 = m1.unitEnds
         let m1 = m1.renameStates (Seq.initInfinite (fun i -> i + m.Q.Count))
         let newStart = m.Q.Count + m1.Q.Count
         let newEnd = m.Q.Count + m1.Q.Count + 1
@@ -42,7 +42,7 @@ type NFAConstructor =
           R = Set.empty }
 
     static member kleene_closure(m: NFA<int, 'char>): NFA<int, 'char> =
-        let m = m.unitEnds ()
+        let m = m.unitEnds
         let newStart = m.Q.Count
         let newEnd = m.Q.Count + 1
 

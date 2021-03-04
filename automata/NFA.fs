@@ -51,6 +51,7 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
         |> Seq.last
         |> fun qs -> not empty && m.isEnd qs
 
+    // TODO operators to be static
     member private m.singleTransmit (char: EChar<'char>) (q: 'state): Set<'state> =
         assert m.Q.Contains q
         match m.F.TryFind q with
@@ -74,44 +75,40 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
             m.epsilonClosure (Set.union qs new_qs)
 
     member private m.epsilonTransmit (qs: Set<'state>) (char: 'char) =
-        qs
-        |> m.transmit (Char char)
-        |> m.epsilonClosure
+        qs |> m.transmit (Char char) |> m.epsilonClosure
 
     member private m.applyRules(qs: Set<'state>): Set<'state> =
         (qs, m.R)
         ||> Set.fold (fun qs rule ->
                 match rule with
-                | Require (a, b) ->
-                    if qs.Contains a && not (qs.Contains b) then qs.Remove a else qs
-                | Deny (a, b) ->
-                    if qs.Contains a && qs.Contains b then qs.Remove a else qs)
+                | Require (a, b) -> if qs.Contains a && not (qs.Contains b) then qs.Remove a else qs
+                | Deny (a, b) -> if qs.Contains a && qs.Contains b then qs.Remove a else qs)
 
     member private m.isEnd(qs: Set<'state>) =
-        qs
-        |> Set.intersect m.E
-        |> Set.isEmpty
-        |> not
+        qs |> Set.intersect m.E |> Set.isEmpty |> not
 
-    member m.unitEnds(): NFA<int, 'char> =
+    member m.unitEnds: NFA<int, 'char> =
         if (m.E.Count <= 1) then
             m.renameStates (Seq.initInfinite id)
         else
             let m = m.renameStates (Seq.initInfinite id)
             let newEnd = Set [ (m.Q |> Seq.max) + 1 ]
-            let f = Set.fold (fun f e -> addTransmit f (e, Epsilon, newEnd)) m.F m.E
+
+            let f =
+                Set.fold (fun f e -> addTransmit f (e, Epsilon, newEnd)) m.F m.E
+
             { m with
                   Q = m.Q + newEnd
                   F = f
                   E = newEnd }
 
-    member m.toDFA(): DFA<int, 'char> =
+    member m.toDFA: DFA<int, 'char> =
         // 从processingQS中取出一个状态，为该状态遍历所有字符，得到新的状态和相应的转移函数，递归调用。
         // TODO 不需要遍历所有的字符，可以通过F表来判断哪些字符可以转移，这样就能处理NotIn之类的特殊字符
-        let rec f
-                (dfaQ: Set<Set<'state>>)
-                (dfaF: Set<Set<'state> * 'char * Set<'state>>)
-                (processingQS: List<Set<'state>>) =
+        let rec f (dfaQ: Set<Set<'state>>)
+                  (dfaF: Set<Set<'state> * 'char * Set<'state>>)
+                  (processingQS: List<Set<'state>>)
+                  =
             match processingQS with
             | head :: tail ->
                 Seq.fold (fun (qs, fs) c ->
@@ -122,6 +119,7 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
                         if (dfaQ.Contains q || List.contains q processingQS)
                         then qs
                         else q :: qs
+
                     (qs, Set.add (head, c, q) fs)) ([], Set.empty) m.C
                 |> fun (newQS, newFS) -> (dfaQ.Add head, newFS + dfaF, newQS @ tail)
                 |||> f
@@ -132,24 +130,32 @@ type NFA<'state, 'char when 'state: comparison and 'char: comparison> with
         (DFA.ofSeq Q (Set [ m.S ]) E F).renameStates(Seq.initInfinite id)
 
     member m.renameStates<'new_state when 'new_state: comparison>(state_seq: seq<'new_state>): NFA<'new_state, 'char> =
-        let Q = Seq.take m.Q.Count state_seq |> Set.ofSeq
-        if Set.count Q <> m.Q.Count then raise (ArgumentException("repeated state"))
+        let Q =
+            Seq.take m.Q.Count state_seq |> Set.ofSeq
 
-        let state_map =
-            (m.Q, Q)
-            ||> Seq.zip
-            |> Map.ofSeq
+        if Set.count Q <> m.Q.Count
+        then raise (ArgumentException("repeated state"))
+
+        let state_map = (m.Q, Q) ||> Seq.zip |> Map.ofSeq
 
         let S = state_map.[m.S]
         let E = Set.map (fun e -> state_map.[e]) m.E
 
-        NFA.ofSeq Q m.C S E
+        NFA.ofSeq
+            Q
+            m.C
+            S
+            E
             (m.F
              |> mapToSeq
              |> Seq.map (fun (q0, c, q1) -> (state_map.[q0], c, Set.map (fun q -> state_map.[q]) q1)))
 
-    static member ofSeq<'state, 'char when 'state: comparison and 'char: comparison> (Q: Set<'state>) (C: Set<'char>)
-                  (S: 'state) (E: Set<'state>) (ts: seq<'state * EChar<'char> * Set<'state>>): NFA<'state, 'char> =
+    static member ofSeq<'state, 'char when 'state: comparison and 'char: comparison> (Q: Set<'state>)
+                                                                                     (C: Set<'char>)
+                                                                                     (S: 'state)
+                                                                                     (E: Set<'state>)
+                                                                                     (ts: seq<'state * EChar<'char> * Set<'state>>)
+                                                                                     : NFA<'state, 'char> =
         { NFA.Q = Q
           C = C
           F = seqToMap ts
